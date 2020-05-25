@@ -22,7 +22,7 @@ case class DWHSparkSessionParser(spark: SparkSession, delegate: ParserInterface)
 
     if (!initialized) {
       initialized = true
-      spark.conf.getOption("kf.dwh.acls").foreach { v =>
+      spark.conf.getOption("spark.kf.dwh.acls").foreach { v =>
         println("Initializing occurences tables...")
         val acls: Map[String, Seq[String]] = mapper.readValue[Map[String, Seq[String]]](v)
         val df = acls.foldLeft(spark.emptyDataFrame) {
@@ -44,7 +44,7 @@ case class DWHSparkSessionParser(spark: SparkSession, delegate: ParserInterface)
   }
 
   private def replace[T](sqlText: String, f: String => T) = {
-    val savedSets = spark.conf.getOption("kf.dwh.saved_sets")
+    val savedSets = spark.conf.getOption("spark.kf.dwh.saved_sets")
     val replaced = savedSets.map(t => sqlText
       .replaceAll("\\bsaved_sets\\b", s"json.`$t`")).getOrElse(sqlText)
     f(replaced)
