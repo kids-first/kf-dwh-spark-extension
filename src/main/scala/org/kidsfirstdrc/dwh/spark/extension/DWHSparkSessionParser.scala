@@ -27,11 +27,16 @@ case class DWHSparkSessionParser(spark: SparkSession, delegate: ParserInterface)
         val acls: Map[String, Seq[String]] = mapper.readValue[Map[String, Seq[String]]](v)
         val df = acls.foldLeft(spark.emptyDataFrame) {
           case (currentDF, (study, authorizedConsentCodes)) =>
-            val nextDF = spark.table(s"variant.occurences_$study").where($"dbgap_consent_code".isin(authorizedConsentCodes: _*))
-            if (currentDF.isEmpty)
-              nextDF
-            else
-              currentDF.union(nextDF)
+            val tableName = s"variant.occurences_$study"
+            if (spark.catalog.tableExists(tableName)) {
+              val nextDF = spark.table(tableName).where($"dbgap_consent_code".isin(authorizedConsentCodes: _*))
+              if (currentDF.isEmpty)
+                nextDF
+              else
+                currentDF.union(nextDF)
+            } else {
+              currentDF
+            }
 
         }
         df.createOrReplaceTempView("occurences")

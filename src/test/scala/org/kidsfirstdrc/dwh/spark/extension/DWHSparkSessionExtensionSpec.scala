@@ -42,7 +42,7 @@ class DWHSparkSessionExtensionSpec extends AnyFlatSpec with WithSparkSession wit
 
       val readSession = getSparkSessionBuilder()
         .config("spark.sql.extensions", "org.kidsfirstdrc.dwh.spark.extension.DWHSparkSessionExtension")
-        .config("kf.dwh.acls", """{"SD_1":["A", "B"], "SD_2":["A", "D"]}""")
+        .config("spark.kf.dwh.acls", """{"SD_1":["A", "B"], "SD_2":["A", "D"], "SD_4": ["E"]}""")
         .getOrCreate()
 
       readSession.catalog.tableExists("occurences") shouldBe true
@@ -147,7 +147,7 @@ class DWHSparkSessionExtensionSpec extends AnyFlatSpec with WithSparkSession wit
 
       val readSession = getSparkSessionBuilder()
         .config("spark.sql.extensions", "org.kidsfirstdrc.dwh.spark.extension.DWHSparkSessionExtension")
-        .config("kf.dwh.saved_sets", s"$work/test_saved_sets")
+        .config("spark.kf.dwh.saved_sets", s"$work/test_saved_sets")
         .getOrCreate()
 
       readSession.table("saved_sets").as[SavedSet].collect() should contain theSameElementsAs Seq(
