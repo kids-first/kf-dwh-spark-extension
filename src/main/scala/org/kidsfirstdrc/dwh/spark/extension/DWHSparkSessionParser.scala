@@ -23,11 +23,11 @@ case class DWHSparkSessionParser(spark: SparkSession, delegate: ParserInterface)
     if (!initialized) {
       initialized = true
       spark.conf.getOption("spark.kf.dwh.acls").foreach { v =>
-        println("Initializing occurences tables...")
+        println("Initializing occurrences tables...")
         val acls: Map[String, Seq[String]] = mapper.readValue[Map[String, Seq[String]]](v)
         val df = acls.foldLeft(spark.emptyDataFrame) {
           case (currentDF, (study, authorizedConsentCodes)) =>
-            val tableName = s"variant.occurences_$study"
+            val tableName = s"variant.occurrences_${study.toLowerCase}"
             if (spark.catalog.tableExists(tableName)) {
               val nextDF = spark.table(tableName).where($"dbgap_consent_code".isin(authorizedConsentCodes: _*))
               if (currentDF.isEmpty)
@@ -39,7 +39,7 @@ case class DWHSparkSessionParser(spark: SparkSession, delegate: ParserInterface)
             }
 
         }
-        df.createOrReplaceTempView("occurences")
+        df.createOrReplaceTempView("occurrences")
       }
       spark.sql("use variant_live")
     }

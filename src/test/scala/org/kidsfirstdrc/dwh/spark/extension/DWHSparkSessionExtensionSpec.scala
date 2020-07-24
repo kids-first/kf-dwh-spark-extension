@@ -7,34 +7,34 @@ import org.scalatest.matchers.should.Matchers
 
 import scala.reflect.io.Path
 
-case class Occurence(id: Int, dbgap_consent_code: String)
+case class Occurrence(id: Int, dbgap_consent_code: String)
 case class SavedSet(id: String, name: String)
 
 class DWHSparkSessionExtensionSpec extends AnyFlatSpec with WithSparkSession with Matchers {
 
 
-  "use session extension" should "create occurences view" in {
+  "use session extension" should "create occurrences view" in {
     val writeSession = getSparkSessionBuilder().getOrCreate()
     import writeSession.implicits._
     writeSession.sql("create database if not exists variant")
     writeSession.sql("create database if not exists variant_live")
     withOutputFolder("work") { work =>
 
-      writeSession.sql("drop table if exists variant.occurences_sd_1")
-      Seq(Occurence(1, "A"), Occurence(2, "B"), Occurence(3, "C")).toDF().write
-        .option("path", s"$work/occurences_sd_1")
+      writeSession.sql("drop table if exists variant.occurrences_sd_1")
+      Seq(Occurrence(1, "A"), Occurrence(2, "B"), Occurrence(3, "C")).toDF().write
+        .option("path", s"$work/occurrences_sd_1")
         .format("json")
-        .saveAsTable("variant.occurences_sd_1")
-      writeSession.sql("drop table if exists variant.occurences_sd_2")
-      Seq(Occurence(4, "A"), Occurence(5, "D")).toDF().write
-        .option("path", s"$work/occurences_sd_2")
+        .saveAsTable("variant.occurrences_sd_1")
+      writeSession.sql("drop table if exists variant.occurrences_sd_2")
+      Seq(Occurrence(4, "A"), Occurrence(5, "D")).toDF().write
+        .option("path", s"$work/occurrences_sd_2")
         .format("json")
-        .saveAsTable("variant.occurences_sd_2")
-      writeSession.sql("drop table if exists variant.occurences_sd_3")
-      Seq(Occurence(6, "A")).toDF().write
-        .option("path", s"$work/occurences_sd_3")
+        .saveAsTable("variant.occurrences_sd_2")
+      writeSession.sql("drop table if exists variant.occurrences_sd_3")
+      Seq(Occurrence(6, "A")).toDF().write
+        .option("path", s"$work/occurrences_sd_3")
         .format("json")
-        .saveAsTable("variant.occurences_sd_3")
+        .saveAsTable("variant.occurrences_sd_3")
       writeSession.stop()
       //Workaround to remove lock on derby db
       val path = Path("metastore_db/dbex.lck")
@@ -45,47 +45,41 @@ class DWHSparkSessionExtensionSpec extends AnyFlatSpec with WithSparkSession wit
         .config("spark.kf.dwh.acls", """{"SD_1":["A", "B"], "SD_2":["A", "D"], "SD_4": ["E"]}""")
         .getOrCreate()
 
-      readSession.catalog.tableExists("occurences") shouldBe true
-      readSession.table("occurences").as[Occurence].collect() should contain theSameElementsAs Seq(
-        Occurence(1, "A"),
-        Occurence(2, "B"),
-        Occurence(4, "A"),
-        Occurence(5, "D")
+      readSession.catalog.tableExists("occurrences") shouldBe true
+      val expectedOccurrences = Seq(
+        Occurrence(1, "A"),
+        Occurrence(2, "B"),
+        Occurrence(4, "A"),
+        Occurrence(5, "D")
       )
-
-
-      readSession.sql("select * from occurences").as[Occurence].collect() should contain theSameElementsAs Seq(
-        Occurence(1, "A"),
-        Occurence(2, "B"),
-        Occurence(4, "A"),
-        Occurence(5, "D")
-      )
+      readSession.table("occurrences").as[Occurrence].collect() should contain theSameElementsAs expectedOccurrences
+      readSession.sql("select * from occurrences").as[Occurrence].collect() should contain theSameElementsAs expectedOccurrences
 
 
     }
   }
-  it should "not create occurences view if acl not provided in sql conf" in {
+  it should "not create occurrences view if acl not provided in sql conf" in {
     val writeSession = getSparkSessionBuilder().getOrCreate()
     import writeSession.implicits._
     writeSession.sql("create database if not exists variant")
     writeSession.sql("create database if not exists variant_live")
     withOutputFolder("work") { work =>
 
-      writeSession.sql("drop table if exists variant.occurences_sd_1")
-      Seq(Occurence(1, "A"), Occurence(2, "B"), Occurence(3, "C")).toDF().write
-        .option("path", s"$work/occurences_sd_1")
+      writeSession.sql("drop table if exists variant.occurrences_sd_1")
+      Seq(Occurrence(1, "A"), Occurrence(2, "B"), Occurrence(3, "C")).toDF().write
+        .option("path", s"$work/occurrences_sd_1")
         .format("json")
-        .saveAsTable("variant.occurences_sd_1")
-      writeSession.sql("drop table if exists variant.occurences_sd_2")
-      Seq(Occurence(4, "A"), Occurence(5, "D")).toDF().write
-        .option("path", s"$work/occurences_sd_2")
+        .saveAsTable("variant.occurrences_sd_1")
+      writeSession.sql("drop table if exists variant.occurrences_sd_2")
+      Seq(Occurrence(4, "A"), Occurrence(5, "D")).toDF().write
+        .option("path", s"$work/occurrences_sd_2")
         .format("json")
-        .saveAsTable("variant.occurences_sd_2")
-      writeSession.sql("drop table if exists variant.occurences_sd_3")
-      Seq(Occurence(6, "A")).toDF().write
-        .option("path", s"$work/occurences_sd_3")
+        .saveAsTable("variant.occurrences_sd_2")
+      writeSession.sql("drop table if exists variant.occurrences_sd_3")
+      Seq(Occurrence(6, "A")).toDF().write
+        .option("path", s"$work/occurrences_sd_3")
         .format("json")
-        .saveAsTable("variant.occurences_sd_3")
+        .saveAsTable("variant.occurrences_sd_3")
       writeSession.stop()
       //Workaround to remove lock on derby db
       val path = Path("metastore_db/dbex.lck")
@@ -95,7 +89,7 @@ class DWHSparkSessionExtensionSpec extends AnyFlatSpec with WithSparkSession wit
         .config("spark.sql.extensions", "org.kidsfirstdrc.dwh.spark.extension.DWHSparkSessionExtension")
         .getOrCreate()
 
-      readSession.catalog.tableExists("occurences") shouldBe false
+      readSession.catalog.tableExists("occurrences") shouldBe false
 
 
     }
@@ -109,7 +103,7 @@ class DWHSparkSessionExtensionSpec extends AnyFlatSpec with WithSparkSession wit
     withOutputFolder("work") { work =>
 
       writeSession.sql("drop table if exists variant_live.test_table")
-      Seq(Occurence(1, "A"), Occurence(2, "B")).toDF().write
+      Seq(Occurrence(1, "A"), Occurrence(2, "B")).toDF().write
         .option("path", s"$work/test_table")
         .format("json")
         .saveAsTable("variant_live.test_table")
@@ -122,9 +116,9 @@ class DWHSparkSessionExtensionSpec extends AnyFlatSpec with WithSparkSession wit
         .config("spark.sql.extensions", "org.kidsfirstdrc.dwh.spark.extension.DWHSparkSessionExtension")
         .getOrCreate()
 
-      readSession.table("test_table").as[Occurence].collect() should contain theSameElementsAs Seq(
-        Occurence(1, "A"),
-        Occurence(2, "B")
+      readSession.table("test_table").as[Occurrence].collect() should contain theSameElementsAs Seq(
+        Occurrence(1, "A"),
+        Occurrence(2, "B")
       )
 
     }
