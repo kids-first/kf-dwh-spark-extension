@@ -8,6 +8,7 @@ import org.scalatest.matchers.should.Matchers
 import scala.reflect.io.Path
 
 case class Occurrence(id: Int, dbgap_consent_code: String)
+
 case class SavedSet(id: String, name: String)
 
 class DWHSparkSessionExtensionSpec extends AnyFlatSpec with WithSparkSession with Matchers {
@@ -25,16 +26,24 @@ class DWHSparkSessionExtensionSpec extends AnyFlatSpec with WithSparkSession wit
         .option("path", s"$work/occurrences_sd_1")
         .format("json")
         .saveAsTable("variant.occurrences_sd_1")
+
       writeSession.sql("drop table if exists variant.occurrences_sd_2")
-      Seq(Occurrence(4, "A"), Occurrence(5, "D")).toDF().write
+      Seq(Occurrence(4, "A"), Occurrence(5, "D"), Occurrence(9, "_PUBLIC_")).toDF().write
         .option("path", s"$work/occurrences_sd_2")
         .format("json")
         .saveAsTable("variant.occurrences_sd_2")
+
       writeSession.sql("drop table if exists variant.occurrences_sd_3")
-      Seq(Occurrence(6, "A")).toDF().write
+      Seq(Occurrence(6, "A"), Occurrence(10, "_PUBLIC_")).toDF().write
         .option("path", s"$work/occurrences_sd_3")
         .format("json")
         .saveAsTable("variant.occurrences_sd_3")
+
+      writeSession.sql("drop table if exists variant.occurrences_sd_4")
+      Seq(Occurrence(7, "A"), Occurrence(8, "B")).toDF().write
+        .option("path", s"$work/occurrences_sd_4")
+        .format("json")
+        .saveAsTable("variant.occurrences_sd_4")
       writeSession.stop()
       //Workaround to remove lock on derby db
       val path = Path("metastore_db/dbex.lck")
@@ -42,7 +51,7 @@ class DWHSparkSessionExtensionSpec extends AnyFlatSpec with WithSparkSession wit
 
       val readSession = getSparkSessionBuilder()
         .config("spark.sql.extensions", "org.kidsfirstdrc.dwh.spark.extension.DWHSparkSessionExtension")
-        .config("spark.kf.dwh.acls", """{"SD_1":["A", "B"], "SD_2":["A", "D"], "SD_4": ["E"]}""")
+        .config("spark.kf.dwh.acls", """{"SD_1":["A", "B"], "SD_2":["A", "D"], "SD_4": [],"SD_5": ["E"]}""")
         .getOrCreate()
 
       readSession.catalog.tableExists("occurrences") shouldBe true
@@ -50,7 +59,12 @@ class DWHSparkSessionExtensionSpec extends AnyFlatSpec with WithSparkSession wit
         Occurrence(1, "A"),
         Occurrence(2, "B"),
         Occurrence(4, "A"),
-        Occurrence(5, "D")
+        Occurrence(5, "D"),
+        Occurrence(7, "A"),
+        Occurrence(8, "B"),
+        Occurrence(9, "_PUBLIC_"),
+        Occurrence(10, "_PUBLIC_")
+
       )
       readSession.table("occurrences").as[Occurrence].collect() should contain theSameElementsAs expectedOccurrences
       readSession.sql("select * from occurrences").as[Occurrence].collect() should contain theSameElementsAs expectedOccurrences

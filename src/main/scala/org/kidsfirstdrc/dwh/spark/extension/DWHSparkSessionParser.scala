@@ -16,7 +16,7 @@ case class DWHSparkSessionParser(spark: SparkSession, delegate: ParserInterface)
   var initialized = false
   val mapper = new ObjectMapper() with ScalaObjectMapper
   mapper.registerModule(DefaultScalaModule)
-
+  val PUBLIC_CONSENT_CODE = "_PUBLIC_"
   private def withExt[T](sqlText: String)(f: String => T) = {
     import spark.implicits._
 
@@ -25,21 +25,38 @@ case class DWHSparkSessionParser(spark: SparkSession, delegate: ParserInterface)
       spark.conf.getOption("spark.kf.dwh.acls").foreach { v =>
         println("Initializing occurrences tables...")
         val acls: Map[String, Seq[String]] = mapper.readValue[Map[String, Seq[String]]](v)
-        val df = acls.foldLeft(spark.emptyDataFrame) {
-          case (currentDF, (study, authorizedConsentCodes)) =>
+        val allOccurrenceTables = spark.catalog.listTables("variant")
+          .filter(t => t.name.startsWith("occurrences_") && !t.name.contains("_re"))
+          .map(t=>s"variant.${t.name}").collect()
+
+        val (authorizedTables, unauthaurizedTables) = acls.foldLeft((spark.emptyDataFrame, allOccurrenceTables)) {
+          case ((currentDF, remainingTables), (study, authorizedConsentCodes)) =>
             val tableName = s"variant.occurrences_${study.toLowerCase}"
-            if (spark.catalog.tableExists(tableName)) {
-              val nextDF = spark.table(tableName).where($"dbgap_consent_code".isin(authorizedConsentCodes: _*))
+            if (remainingTables.contains(tableName)) {
+              val nextRemainingTables = remainingTables.filterNot(_ == tableName)
+              val nextDF = if (authorizedConsentCodes.nonEmpty) {
+                spark.table(tableName).where($"dbgap_consent_code".isin(authorizedConsentCodes :+ PUBLIC_CONSENT_CODE: _*))
+              } else {
+                spark.table(tableName)
+              }
               if (currentDF.isEmpty)
-                nextDF
+                (nextDF, nextRemainingTables)
               else
-                currentDF.union(nextDF)
+                (currentDF.union(nextDF), nextRemainingTables)
             } else {
-              currentDF
+              (currentDF, remainingTables)
             }
 
         }
-        df.createOrReplaceTempView("occurrences")
+        val withPublics = unauthaurizedTables.foldLeft(authorizedTables) {
+          case (currentDF, tableName) =>
+            val nextDF = spark.table(tableName).where($"dbgap_consent_code" === PUBLIC_CONSENT_CODE)
+            if (currentDF.isEmpty)
+              nextDF
+            else
+              currentDF.union(nextDF)
+        }
+        withPublics.createOrReplaceTempView("occurrences")
       }
       spark.sql("use variant_live")
     }
