@@ -9,6 +9,7 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
+import org.apache.spark.sql.functions.not
 import org.apache.spark.sql.types.{DataType, StructType}
 
 case class DWHSparkSessionParser(spark: SparkSession, delegate: ParserInterface) extends ParserInterface {
@@ -17,6 +18,7 @@ case class DWHSparkSessionParser(spark: SparkSession, delegate: ParserInterface)
   val mapper = new ObjectMapper() with ScalaObjectMapper
   mapper.registerModule(DefaultScalaModule)
   val PUBLIC_CONSENT_CODE = "_PUBLIC_"
+
   private def withExt[T](sqlText: String)(f: String => T) = {
     import spark.implicits._
 
@@ -25,9 +27,10 @@ case class DWHSparkSessionParser(spark: SparkSession, delegate: ParserInterface)
       spark.conf.getOption("spark.kf.dwh.acls").foreach { v =>
         println("Initializing occurrences tables...")
         val acls: Map[String, Seq[String]] = mapper.readValue[Map[String, Seq[String]]](v)
-        val allOccurrenceTables = spark.catalog.listTables("variant")
-          .filter(t => t.name.startsWith("occurrences_") && !t.name.contains("_re"))
-          .map(t=>s"variant.${t.name}").collect()
+        val allOccurrenceTables = spark.sql("show tables in variant").select("tableName")
+          .where($"tableName" like "occurrences_sd%" and not($"tableName" like "%_re_0%"))
+          .as[String].collect()
+          .map(t => s"variant.$t")
 
         val (authorizedTables, unauthaurizedTables) = acls.foldLeft((spark.emptyDataFrame, allOccurrenceTables)) {
           case ((currentDF, remainingTables), (study, authorizedConsentCodes)) =>
