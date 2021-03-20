@@ -1,11 +1,11 @@
 name := "kf-dwh-spark-extension"
 
-version := "0.1"
+version := "0.2"
 
-scalaVersion := "2.11.12"
+scalaVersion := "2.12.10"
 javacOptions ++= Seq("-source", "1.8", "-target", "1.8", "-Xlint")
 
-val spark_version = "2.4.5"
+val spark_version = "3.0.2"
 
 /* Runtime */
 libraryDependencies +=  "org.apache.spark" %% "spark-sql" % spark_version % Provided

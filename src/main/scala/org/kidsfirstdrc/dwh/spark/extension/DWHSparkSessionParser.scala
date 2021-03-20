@@ -3,7 +3,6 @@ package org.kidsfirstdrc.dwh.spark.extension
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
-import org.apache.spark.SparkFiles
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.parser.ParserInterface
@@ -86,4 +85,8 @@ case class DWHSparkSessionParser(spark: SparkSession, delegate: ParserInterface)
   override def parseTableSchema(sqlText: String): StructType = withExt(sqlText)(delegate.parseTableSchema)
 
   override def parseDataType(sqlText: String): DataType = withExt(sqlText)(delegate.parseDataType)
+
+  override def parseMultipartIdentifier(sqlText: String): Seq[String] = withExt(sqlText)(delegate.parseMultipartIdentifier)
+
+  override def parseRawDataType(sqlText: String): DataType = withExt(sqlText)(delegate.parseRawDataType)
 }
