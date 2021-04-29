@@ -13,6 +13,50 @@ case class SavedSet(id: String, name: String)
 
 class DWHSparkSessionExtensionSpec extends AnyFlatSpec with WithSparkSession with Matchers {
 
+  "use session extension" should "create occurrences_family view" in {
+    val writeSession = getSparkSessionBuilder().getOrCreate()
+    import writeSession.implicits._
+    writeSession.sql("create database if not exists variant")
+    writeSession.sql("create database if not exists variant_live")
+    withOutputFolder("work") { work =>
+
+      writeSession.sql("drop table if exists variant.occurrences_family_sd_1")
+      Seq(Occurrence(1, "A"), Occurrence(2, "B"), Occurrence(3, "C")).toDF().write
+        .option("path", s"$work/occurrences_family_sd_1")
+        .format("json")
+        .saveAsTable("variant.occurrences_family_sd_1")
+
+      writeSession.sql("drop table if exists variant.occurrences_family_sd_2")
+      Seq(Occurrence(4, "A"), Occurrence(5, "D"), Occurrence(9, "_PUBLIC_")).toDF().write
+        .option("path", s"$work/occurrences_family_sd_2")
+        .format("json")
+        .saveAsTable("variant.occurrences_family_sd_2")
+
+      writeSession.stop()
+      //Workaround to remove lock on derby db
+      val path = Path("metastore_db/dbex.lck")
+      path.delete()
+
+      val readSession = getSparkSessionBuilder()
+        .config("spark.sql.extensions", "org.kidsfirstdrc.dwh.spark.extension.DWHSparkSessionExtension")
+        .config("spark.kf.dwh.acls", """{"SD_1":["A", "B"], "SD_2":["A", "D"], "SD_4": [],"SD_5": ["E"]}""")
+        .getOrCreate()
+
+      readSession.catalog.tableExists("occurrences_family") shouldBe true
+      val expectedResult = Seq(
+        Occurrence(1, "A"),
+        Occurrence(2, "B"),
+        Occurrence(4, "A"),
+        Occurrence(5, "D"),
+        Occurrence(9, "_PUBLIC_"),
+
+      )
+      readSession.table("occurrences_family").as[Occurrence].collect() should contain theSameElementsAs expectedResult
+      readSession.sql("select * from occurrences_family").as[Occurrence].collect() should contain theSameElementsAs expectedResult
+
+    }
+  }
+
 
   "use session extension" should "create occurrences view" in {
     val writeSession = getSparkSessionBuilder().getOrCreate()
@@ -72,6 +116,7 @@ class DWHSparkSessionExtensionSpec extends AnyFlatSpec with WithSparkSession wit
 
     }
   }
+
   it should "not create occurrences view if acl not provided in sql conf" in {
     val writeSession = getSparkSessionBuilder().getOrCreate()
     import writeSession.implicits._
@@ -95,6 +140,7 @@ class DWHSparkSessionExtensionSpec extends AnyFlatSpec with WithSparkSession wit
         .format("json")
         .saveAsTable("variant.occurrences_sd_3")
       writeSession.stop()
+
       //Workaround to remove lock on derby db
       val path = Path("metastore_db/dbex.lck")
       path.delete()
