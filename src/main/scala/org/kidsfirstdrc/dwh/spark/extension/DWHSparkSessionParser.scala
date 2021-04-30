@@ -18,47 +18,51 @@ case class DWHSparkSessionParser(spark: SparkSession, delegate: ParserInterface)
   mapper.registerModule(DefaultScalaModule)
   val PUBLIC_CONSENT_CODE = "_PUBLIC_"
 
-  private def withExt[T](sqlText: String)(f: String => T) = {
+  private def createViewsFor(tablePrefix: String, acls_str: String)(spark: SparkSession): Unit = {
     import spark.implicits._
+    println(s"Initializing $tablePrefix tables...")
+    val acls: Map[String, Seq[String]] = mapper.readValue[Map[String, Seq[String]]](acls_str)
+    val allOccurrenceTables: Array[String] = spark.sql("show tables in variant").select("tableName")
+      .where($"tableName" like s"${tablePrefix}_sd%" and not($"tableName" like "%_re_0%"))
+      .as[String].collect()
+      .map(t => s"variant.$t")
 
+    val (authorizedTables, unauthaurizedTables) = acls.foldLeft((spark.emptyDataFrame, allOccurrenceTables)) {
+      case ((currentDF, remainingTables), (study, authorizedConsentCodes)) =>
+        val tableName = s"variant.${tablePrefix}_${study.toLowerCase}"
+        if (remainingTables.contains(tableName)) {
+          val nextRemainingTables = remainingTables.filterNot(_ == tableName)
+          val nextDF = if (authorizedConsentCodes.nonEmpty) {
+            spark.table(tableName).where($"dbgap_consent_code".isin(authorizedConsentCodes :+ PUBLIC_CONSENT_CODE: _*))
+          } else {
+            spark.table(tableName)
+          }
+          if (currentDF.isEmpty)
+            (nextDF, nextRemainingTables)
+          else
+            (currentDF.unionByName(nextDF), nextRemainingTables)
+        } else {
+          (currentDF, remainingTables)
+        }
+
+    }
+    val withPublics = unauthaurizedTables.foldLeft(authorizedTables) {
+      case (currentDF, tableName) =>
+        val nextDF = spark.table(tableName).where($"dbgap_consent_code" === PUBLIC_CONSENT_CODE)
+        if (currentDF.isEmpty)
+          nextDF
+        else
+          currentDF.unionByName(nextDF)
+    }
+    withPublics.createOrReplaceTempView(tablePrefix)
+  }
+
+  private def withExt[T](sqlText: String)(f: String => T) = {
     if (!initialized) {
       initialized = true
-      spark.conf.getOption("spark.kf.dwh.acls").foreach { v =>
-        println("Initializing occurrences tables...")
-        val acls: Map[String, Seq[String]] = mapper.readValue[Map[String, Seq[String]]](v)
-        val allOccurrenceTables = spark.sql("show tables in variant").select("tableName")
-          .where($"tableName" like "occurrences_sd%" and not($"tableName" like "%_re_0%"))
-          .as[String].collect()
-          .map(t => s"variant.$t")
-
-        val (authorizedTables, unauthaurizedTables) = acls.foldLeft((spark.emptyDataFrame, allOccurrenceTables)) {
-          case ((currentDF, remainingTables), (study, authorizedConsentCodes)) =>
-            val tableName = s"variant.occurrences_${study.toLowerCase}"
-            if (remainingTables.contains(tableName)) {
-              val nextRemainingTables = remainingTables.filterNot(_ == tableName)
-              val nextDF = if (authorizedConsentCodes.nonEmpty) {
-                spark.table(tableName).where($"dbgap_consent_code".isin(authorizedConsentCodes :+ PUBLIC_CONSENT_CODE: _*))
-              } else {
-                spark.table(tableName)
-              }
-              if (currentDF.isEmpty)
-                (nextDF, nextRemainingTables)
-              else
-                (currentDF.union(nextDF), nextRemainingTables)
-            } else {
-              (currentDF, remainingTables)
-            }
-
-        }
-        val withPublics = unauthaurizedTables.foldLeft(authorizedTables) {
-          case (currentDF, tableName) =>
-            val nextDF = spark.table(tableName).where($"dbgap_consent_code" === PUBLIC_CONSENT_CODE)
-            if (currentDF.isEmpty)
-              nextDF
-            else
-              currentDF.union(nextDF)
-        }
-        withPublics.createOrReplaceTempView("occurrences")
+      spark.conf.getOption("spark.kf.dwh.acls").foreach { acls =>
+        createViewsFor("occurrences", acls)(spark)
+        createViewsFor("occurrences_family", acls)(spark)
       }
       spark.sql("use variant_live")
     }
